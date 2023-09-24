@@ -57,7 +57,7 @@ void myCalcOpticalFlowLK(cv::Mat image1, cv::Mat image2,
     }
     assert(next_kp.size() == prev_kp.size());
 
-    constexpr float threshold = 0.5;
+    constexpr float threshold = 0.05;
     cv::Mat image1_gray, image2_gray;
     cv::cvtColor(image1, image1_gray, cv::COLOR_BGR2GRAY);
     cv::cvtColor(image2, image2_gray, cv::COLOR_BGR2GRAY);
@@ -74,40 +74,53 @@ void myCalcOpticalFlowLK(cv::Mat image1, cv::Mat image2,
         int u = prev_kp[i].x;
         int v = prev_kp[i].y;
         Eigen::Vector2f delta_p = Eigen::Vector2f::Zero();
-        Eigen::Vector2f J = Eigen::Vector2f::Zero();
+        Eigen::MatrixXf J(2, patch_size * patch_size);
         bool jacob_initialized = false;
 
         for(int iter = 0; iter <= iteration; iter++)
         {
             Eigen::Matrix2f Hessian = Eigen::Matrix2f::Zero();
             Eigen::Vector2f err_total = Eigen::Vector2f::Zero();
-
+            int pixel_idx_count = -1;
             for(int u_step = -patch_size / 2; u_step < patch_size / 2; u_step++)
+            {
                 for(int v_step = -patch_size / 2; v_step < patch_size / 2; v_step++)
                 {
+                    pixel_idx_count++;
+
                     if(!isIndexValid(image1_gray, v + v_step, u + u_step) || !isIndexValid(image2_gray, v + v_step + p(1), u + u_step + p(0)))
                     {
                         continue;
                     }
 
-                    if(magic_operation && !jacob_initialized)
+                    float err = image1_gray.at<uchar>(v + v_step, u + u_step) - image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0));    
+
+                    if(magic_operation)
                     {
-                        float jacob_x = 0.5 * ( image2_gray.at<uchar>(v + v_step, u + u_step + 1) - image2_gray.at<uchar>(v + v_step, u + u_step - 1));
-                        float jacob_y = 0.5 * ( image2_gray.at<uchar>(v + v_step + 1, u + u_step) - image2_gray.at<uchar>(v + v_step - 1, u + u_step));
-                        J << jacob_x, jacob_y;
-                        jacob_initialized = true;
+                        if(!jacob_initialized)
+                        {
+                            float jacob_x = 0.5 * ( image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0) + 1) - image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0) - 1));
+                            float jacob_y = 0.5 * ( image2_gray.at<uchar>(v + v_step + p(1) + 1, u + u_step + p(0)) - image2_gray.at<uchar>(v + v_step + p(1) - 1, u + u_step + p(0)));
+                            J.block<2, 1>(0, pixel_idx_count) = (Eigen::Vector2f() << jacob_x, jacob_y).finished();
+                        }
                     }
 
                     if(!magic_operation)
                     {
                         float jacob_x = 0.5 * ( image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0) + 1) - image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0) - 1));
                         float jacob_y = 0.5 * ( image2_gray.at<uchar>(v + v_step + p(1) + 1, u + u_step + p(0)) - image2_gray.at<uchar>(v + v_step + p(1) - 1, u + u_step + p(0)));
-                        J << jacob_x, jacob_y;                        
+                        J.block<2, 1>(0, pixel_idx_count) = (Eigen::Vector2f() << jacob_x, jacob_y).finished();                      
                     }
-                    float err = image1_gray.at<uchar>(v + v_step, u + u_step) - image2_gray.at<uchar>(v + v_step + p(1), u + u_step + p(0));
-                    err_total += J * err;
-                    Hessian += J * J.transpose();
+                    
+                    err_total += J.block<2, 1>(0, pixel_idx_count) * err;
                 }
+            }
+            
+            if(!magic_operation || !jacob_initialized)
+            {
+                Hessian = J * J.transpose();
+                jacob_initialized = true;
+            }
 
             delta_p = Hessian.ldlt().solve(err_total);
             p += delta_p;

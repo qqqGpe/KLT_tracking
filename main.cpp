@@ -52,9 +52,9 @@ int main( int argc, char** argv )
             prev_keypoints.push_back(kp);
         }
         std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-        myCalcOpticalFlowLK(last_image, image, prev_keypoints, next_keypoints, status, true, 21, 10, false); 
+        myCalcOpticalFlowLK(last_image, image, prev_keypoints, next_keypoints, status, false, 21, 10, false); 
         // myCalcOpticalFlowPyrLK(last_image, image, prev_keypoints, next_keypoints, status, 21, 10, 2);
-        // cv::calcOpticalFlowPyrLK( last_image, image, prev_keypoints, next_keypoints, status, error, cv::Size(21, 21), 1 ); // official implementation
+        // cv::calcOpticalFlowPyrLK( last_image, image, prev_keypoints, next_keypoints, status, error, cv::Size(21, 21), 3); // official implementation
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
         std::chrono::duration<double> time_used = std::chrono::duration_cast<std::chrono::duration<double>>( t2 - t1 );
         std::cout<<"LK Flow use time: "<< time_used.count() << " seconds." << std::endl;
